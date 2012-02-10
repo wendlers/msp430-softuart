@@ -20,7 +20,7 @@ http://blog.hodgepig.org/tag/msp430/
 Introduction
 ------------
 
-This examples shows how to use software UART on the TI Launchpad with a MSP430G2231 MCU (which does NOT have a harware UART). With the code from Nicholas J. Conn, Joby Taffey and Colin Funnell I was able to create a half-way-decent software UART. Thanks Nicholas, Joby and Colin! So basically my job only was puzzeling things togehter and wrap them in a msp460-gcc project.
+This example shows how to use software UART on the TI Launchpad with a MSP430G2231 MCU (which does NOT have a hardware UART). With the code from Nicholas J. Conn, Joby Taffey and Colin Funnell I was able to create a half-way-decent software UART. Thanks Nicholas, Joby and Colin! So basically my job only was puzzeling things togehter and wrap them in a msp460-gcc project.
 
 I am not going into detail about how it works, since Nicholas already did a great job doing that :-):
 
@@ -30,7 +30,7 @@ http://www.msp430launchpad.com/2010/08/half-duplex-software-uart-on-launchpad.ht
 Compilation
 ------------
 
-Note: This project is written for msp430-gcc on Linux (I used v4.5.3 which is available as package on ubuntu). For flashing the "mspdebug" tool is used (also from the Ubuntu package).
+Note: This project is written for msp430-gcc on Linux (I used v4.5.3 which is available as package on ubuntu). For flashing the "mspdebug" tool was used (also from the Ubuntu package).
 
 To compile the source just issue a:
 
@@ -42,11 +42,11 @@ This builds the firmware in the "bin" subdirectory in various formats.
 Doxygen Docs
 ------------
 
-If you installed doxygen on your system, you could generate the HTML-based API documentation by calling:
+If you installed doxygen on your system, you could generate the HTML-based documentation by calling:
 
 make gen-docs
 
-This will create the API documentation under "doc/gen/html".
+This will create the documentation under "doc/gen/html".
 
 
 Flashing
@@ -60,7 +60,7 @@ make flash-target
 Usage
 ------------
 
-Connecting your Lauchpad should give you a new serial device /dev/ttyACM0. Connect to this port at 9600 bauds - e.g. by using screen:
+Connecting your Launchpad should give you a new serial device "/dev/ttyACM0". Connect to this port at 9600 bauds - e.g. by using screen:
 
 screen /dev/ttyACM0 9600
 
