@@ -5,206 +5,99 @@
  * sw@kaltpost.de
  * http://gpio.kaltpost.de
  *
- * ****************************************************************************
- * The original code is taken form Nicholas J. Conn example:
- *
- * http://www.msp430launchpad.com/2010/08/half-duplex-software-uart-on-launchpad.html
- *
- * Origial Description from Nicholas:
- *
- * Half Duplex Software UART on the LaunchPad
- *
- * Description: This code provides a simple Bi-Directional Half Duplex
- * Software UART. The timing is dependant on SMCLK, which
- * is set to 1MHz. The transmit function is based off of
- * the example code provided by TI with the LaunchPad.
- * This code was originally created for "NJC's MSP430
- * LaunchPad Blog".
- *
- * Author: Nicholas J. Conn - http://msp430launchpad.com
- * Email: webmaster at msp430launchpad.com
- * Date: 08-17-10
- * ****************************************************************************
- * Includes also improvements from Joby Taffey and fixes from Colin Funnell
- * as posted here:
- *
- * http://blog.hodgepig.org/tag/msp430/
+ ******************************************************************************
+ * Code is based on TIs Timer_A UART example
  ******************************************************************************/
 
 #include <msp430.h>
 #include <legacymsp430.h>
-#include <stdbool.h>
 
 #include "uart.h"
 
-/**
- * TXD on P1.1
- */
-#define TXD BIT1
+#define UART_TBIT_DIV_2     (1000000 / (9600 * 2))
+#define UART_TBIT           (1000000 / 9600)
 
-/**
- * RXD on P1.2
- */
-#define RXD BIT2
-
-/**
- * CPU freq.
- */
-#define FCPU 			1000000
-
-/**
- * Baudrate
- */
-#define BAUDRATE 		9600
-
-/**
- * Bit time
- */
-#define BIT_TIME        (FCPU / BAUDRATE)
-
-/**
- * Half bit time
- */
-#define HALF_BIT_TIME   (BIT_TIME / 2)
-
-/**
- * Bit count, used when transmitting byte
- */
-static volatile uint8_t bitCount;
-
-/**
- * Value sent over UART when uart_putc() is called
- */
-static volatile unsigned int TXByte;
-
-/**
- * Value recieved once hasRecieved is set
- */
-static volatile unsigned int RXByte;
-
-/**
- * Status for when the device is receiving
- */
-static volatile bool isReceiving = false;
-
-/**
- * Lets the program know when a byte is received
- */
-static volatile bool hasReceived = false;
+unsigned int  txData;                       // UART internal variable for TX
+unsigned char rxBuffer;                     // Received UART character
 
 void uart_init(void)
 {
-     P1SEL |= TXD;
-     P1DIR |= TXD;
-
-     P1IES |= RXD; 		// RXD Hi/lo edge interrupt
-     P1IFG &= ~RXD; 		// Clear RXD (flag) before enabling interrupt
-     P1IE  |= RXD; 		// Enable RXD interrupt
+	P1SEL = UART_TXD + UART_RXD;            // Timer function for TXD/RXD pins
+    P1DIR |= UART_TXD;						// Set TXD to output
+	TACCTL0 = OUT;                          // Set TXD Idle as Mark = '1'
+    TACCTL1 = SCS + CM1 + CAP + CCIE;       // Sync, Neg Edge, Capture, Int
+    TACTL   = TASSEL_2 + MC_2;              // SMCLK, start in continuous mode
 }
 
-bool uart_getc(uint8_t *c)
+unsigned char uart_getc()
 {
-     if (!hasReceived) {
-          return false;
-     }
-
-     *c = RXByte;
-     hasReceived = false;
-
-     return true;
+	// wait for incomming data
+	__bis_SR_register(LPM0_bits);
+	return rxBuffer;
 }
 
-void uart_putc(uint8_t c)
+void uart_putc(unsigned char c)
 {
-     TXByte = c;
-
-     while(isReceiving); 					// Wait for RX completion
-
-     CCTL0 = OUT; 							// TXD Idle as Mark
-     TACTL = TASSEL_2 + MC_2; 				// SMCLK, continuous mode
-
-     bitCount = 0xA; 						// Load Bit counter, 8 bits + ST/SP
-     CCR0 = TAR; 							// Initialize compare register
-
-     CCR0 += BIT_TIME; 						// Set time till first bit
-     TXByte |= 0x100; 						// Add stop bit to TXByte (which is logical 1)
-     TXByte = TXByte << 1; 					// Add start bit (which is logical 0)
-
-     CCTL0 = CCIS_0 + OUTMOD_0 + CCIE + OUT; // Set signal, intial value, enable interrupts
-
-     while ( CCTL0 & CCIE ); 				// Wait for previous TX completion
+     while (TACCTL0 & CCIE);                 // Ensure last char got TX'd
+     TACCR0 = TAR;                           // Current state of TA counter
+     TACCR0 += UART_TBIT;                    // One bit time till first bit
+     TACCTL0 = OUTMOD0 + CCIE;               // Set TXD on EQU0, Int
+     txData = c;                             // Load global variable
+     txData |= 0x100;                        // Add mark stop bit to TXData
+     txData <<= 1;                           // Add space start bit
 }
 
 void uart_puts(const char *str)
 {
-     if(*str != 0) uart_putc(*str++);
-     while(*str != 0) uart_putc(*str++);
+     while(*str) uart_putc(*str++);
 }
 
-/**
- * ISR for RXD
- */
-interrupt(PORT1_VECTOR) PORT1_ISR(void)
+interrupt(TIMERA0_VECTOR) Timer_A0_ISR(void)
 {
-     isReceiving = true;
+    static unsigned char txBitCnt = 10;
+ 
+    TACCR0 += UART_TBIT;                    // Add Offset to CCRx
+    if (txBitCnt == 0) {                    // All bits TXed?
+        TACCTL0 &= ~CCIE;                   // All bits TXed, disable interrupt
+        txBitCnt = 10;                      // Re-load bit counter
+    }
+    else {
+        if (txData & 0x01) {
+          TACCTL0 &= ~OUTMOD2;              // TX Mark '1'
+        }
+        else {
+          TACCTL0 |= OUTMOD2;               // TX Space '0'
+        }
+        txData >>= 1;
+        txBitCnt--;
+    }
+}      
 
-     P1IE &= ~RXD; 					// Disable RXD interrupt
-     P1IFG &= ~RXD; 					// Clear RXD IFG (interrupt flag)
-
-     TACTL = TASSEL_2 + MC_2; 		// SMCLK, continuous mode
-     CCR0 = TAR; 					// Initialize compare register
-     CCR0 += HALF_BIT_TIME; 			// Set time till first bit
-     CCTL0 = OUTMOD_1 + CCIE; 		// Disable TX and enable interrupts
-
-     RXByte = 0; 					// Initialize RXByte
-     bitCount = 9; 					// Load Bit counter, 8 bits + start bit
-}
-
-/**
- * ISR for TXD and RXD
- */
-interrupt(TIMERA0_VECTOR) TIMERA0_ISR(void)
+interrupt(TIMERA1_VECTOR) Timer_A1_ISR(void)
 {
-     if(!isReceiving) {
-          CCR0 += BIT_TIME; 						// Add Offset to CCR0
-          if ( bitCount == 0) { 					// If all bits TXed
-               TACTL = TASSEL_2; 					// SMCLK, timer off (for power consumption)
-               CCTL0 &= ~ CCIE ; 					// Disable interrupt
-          } else {
-               if (TXByte & 0x01) {
-                    CCTL0 = ((CCTL0 & ~OUTMOD_7 ) | OUTMOD_1);  //OUTMOD_7 defines the 'window' of the field.
-               } else {
-                    CCTL0 = ((CCTL0 & ~OUTMOD_7 ) | OUTMOD_5);  //OUTMOD_7 defines the 'window' of the field.
-               }
-
-               TXByte = TXByte >> 1;
-               bitCount --;
-          }
-     } else {
-          CCR0 += BIT_TIME; 						// Add Offset to CCR0
-
-          if ( bitCount == 0) {
-
-               TACTL = TASSEL_2; 					// SMCLK, timer off (for power consumption)
-               CCTL0 &= ~ CCIE ; 					// Disable interrupt
-
-               isReceiving = false;
-
-               P1IFG &= ~RXD; 						// clear RXD IFG (interrupt flag)
-               P1IE |= RXD; 						// enabled RXD interrupt
-
-               if ( (RXByte & 0x201) == 0x200) { 	// Validate the start and stop bits are correct
-                    RXByte = RXByte >> 1; 			// Remove start bit
-                    RXByte &= 0xFF; 				// Remove stop bit
-                    hasReceived = true;
-               }
-          } else {
-               if ( (P1IN & RXD) == RXD) { 		// If bit is set?
-                    RXByte |= 0x400; 				// Set the value in the RXByte
-               }
-               RXByte = RXByte >> 1; 				// Shift the bits down
-               bitCount --;
-          }
-     }
+    static unsigned char rxBitCnt = 8;
+    static unsigned char rxData   = 0;
+ 
+    switch (TAIV) { 							 // Use calculated branching
+        case TAIV_TACCR1:                        // TACCR1 CCIFG - UART RX
+            TACCR1 += UART_TBIT;                 // Add Offset to CCRx
+            if (TACCTL1 & CAP) {                 // Capture mode = start bit edge
+                TACCTL1 &= ~CAP;                 // Switch capture to compare mode
+                TACCR1 += UART_TBIT_DIV_2;       // Point CCRx to middle of D0
+            }
+            else {
+                rxData >>= 1;
+                if (TACCTL1 & SCCI) {            // Get bit waiting in receive latch
+                    rxData |= 0x80;
+                }
+                rxBitCnt--;
+                if (rxBitCnt == 0) {             // All bits RXed?
+                    rxBuffer = rxData;           // Store in global variable
+                    rxBitCnt = 8;                // Re-load bit counter
+                    TACCTL1 |= CAP;              // Switch compare to capture mode
+                    __bic_SR_register_on_exit(LPM0_bits);  // Clear LPM0 bits from 0(SR)
+                }
+            }
+            break;
+    }
 }
-

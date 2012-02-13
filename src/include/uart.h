@@ -5,37 +5,15 @@
  * sw@kaltpost.de
  * http://gpio.kaltpost.de
  *
- * ****************************************************************************
- * The original code is taken form Nicholas J. Conn example:
- *
- * http://www.msp430launchpad.com/2010/08/half-duplex-software-uart-on-launchpad.html
- *
- * Origial Description from Nicholas:
- *
- * Half Duplex Software UART on the LaunchPad
- *
- * Description: This code provides a simple Bi-Directional Half Duplex
- * Software UART. The timing is dependant on SMCLK, which
- * is set to 1MHz. The transmit function is based off of
- * the example code provided by TI with the LaunchPad.
- * This code was originally created for "NJC's MSP430
- * LaunchPad Blog".
- *
- * Author: Nicholas J. Conn - http://msp430launchpad.com
- * Email: webmaster at msp430launchpad.com
- * Date: 08-17-10
  *****************************************************************************
- * Includes also improvements from Joby Taffey and fixes from Colin Funnell
- * as posted here:
- *
- * http://blog.hodgepig.org/tag/msp430/
+ * Code is based on TIs Timer_A UART example
  *****************************************************************************/
 
 #ifndef __UART_H
 #define __UART_H
 
-#include <stdbool.h>
-#include <stdint.h>
+#define UART_TXD   0x02                     // TXD on P1.1 (Timer0_A.OUT0)
+#define UART_RXD   0x04                     // RXD on P1.2 (Timer0_A.CCI1A)
 
 /**
  * Initialize soft UART
@@ -43,19 +21,18 @@
 void uart_init(void);
 
 /**
- * Read one character from UART non-blocking.
+ * Read one character from UART blocking.
  *
- * @param[out]	*c	character received (if one was available)
- * @return			true if character received, false otherwise
+ * @return	character received 
  */
-bool uart_getc(uint8_t *c);
+unsigned char uart_getc();
 
 /**
  * Write one chracter to the UART blocking.
  *
  * @param[in]	*c	the character to write
  */
-void uart_putc(uint8_t c);
+void uart_putc(unsigned char c);
 
 /**
  * Write string to the UART blocking.

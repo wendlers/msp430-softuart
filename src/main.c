@@ -10,7 +10,6 @@
  ******************************************************************************/
 
 #include <msp430.h>
-#include <stdint.h>
 
 #include "uart.h"
 
@@ -21,8 +20,9 @@ int main(void)
 {
      WDTCTL = WDTPW + WDTHOLD; 	// Stop WDT
 
-     BCSCTL1 = CALBC1_1MHZ; 		// Set range
-     DCOCTL = CALDCO_1MHZ; 		// SMCLK = DCO = 1MHz
+     DCOCTL  = 0x00;            // Set DCOCLK to 1MHz
+     BCSCTL1 = CALBC1_1MHZ;
+     DCOCTL  = CALDCO_1MHZ;
 
      uart_init();
 
@@ -32,18 +32,17 @@ int main(void)
      uart_puts("MSP430 softuart\n\r");
      uart_puts("***************\n\r\n\r");
 
-     uint8_t c;
+     unsigned char c;
 
      while(1) {
-          if(uart_getc(&c)) {
-               if(c == '\r') {
-                    uart_putc('\n');
-                    uart_putc('\r');
-               } else {
-                    uart_putc('[');
-                    uart_putc(c);
-                    uart_putc(']');
-               }
+          c = uart_getc();
+          if(c == '\r') {
+               uart_putc('\n');
+               uart_putc('\r');
+          } else {
+               uart_putc('[');
+               uart_putc(c);
+               uart_putc(']');
           }
      }
 }
