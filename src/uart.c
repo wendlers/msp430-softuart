@@ -20,13 +20,22 @@
 unsigned int  txData;                       // UART internal variable for TX
 unsigned char rxBuffer;                     // Received UART character
 
+void (*uart_rx_isr_ptr)(unsigned char c);
+
 void uart_init(void)
 {
+	uart_set_rx_isr_ptr(0L);
+
 	P1SEL = UART_TXD + UART_RXD;            // Timer function for TXD/RXD pins
     P1DIR |= UART_TXD;						// Set TXD to output
 	TACCTL0 = OUT;                          // Set TXD Idle as Mark = '1'
     TACCTL1 = SCS + CM1 + CAP + CCIE;       // Sync, Neg Edge, Capture, Int
     TACTL   = TASSEL_2 + MC_2;              // SMCLK, start in continuous mode
+}
+
+void uart_set_rx_isr_ptr(void (*isr_ptr)(unsigned char c)) 
+{
+	uart_rx_isr_ptr = isr_ptr;	
 }
 
 unsigned char uart_getc()
@@ -95,7 +104,12 @@ interrupt(TIMERA1_VECTOR) Timer_A1_ISR(void)
                     rxBuffer = rxData;           // Store in global variable
                     rxBitCnt = 8;                // Re-load bit counter
                     TACCTL1 |= CAP;              // Switch compare to capture mode
+
                     __bic_SR_register_on_exit(LPM0_bits);  // Clear LPM0 bits from 0(SR)
+
+					if(uart_rx_isr_ptr != 0L) {
+						(uart_rx_isr_ptr)(rxBuffer);
+					}
                 }
             }
             break;

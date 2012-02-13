@@ -5,7 +5,9 @@
  * sw@kaltpost.de
  * http://gpio.kaltpost.de
  *
- * Echos back each character received enclosed in square brackets "[" and "]".
+ * Echos back each character received. Blinks green LED in main loop. Toggles
+ * red LED on RX.
+ *
  * Use /dev/ttyACM0 at 9600 Bauds (and 8,N,1).
  ******************************************************************************/
 
@@ -13,6 +15,11 @@
 
 #include "uart.h"
 
+void uart_rx_isr(unsigned char c) {
+	uart_putc(c);
+	P1OUT ^= BIT0;		// toggle P1.0 (red led)
+}
+ 
 /**
  * Main routine
  */
@@ -24,7 +31,13 @@ int main(void)
      BCSCTL1 = CALBC1_1MHZ;
      DCOCTL  = CALDCO_1MHZ;
 
+	 P1DIR  = BIT0 + BIT6; 		// P1.0 and P1.6 are the red+green LEDs	
+	 P1OUT  = BIT0 + BIT6; 		// All LEDs off
+
      uart_init();
+
+	 // register ISR called when data was received
+     uart_set_rx_isr_ptr(uart_rx_isr);
 
      __enable_interrupt();
 
@@ -32,18 +45,15 @@ int main(void)
      uart_puts("MSP430 softuart\n\r");
      uart_puts("***************\n\r\n\r");
 
-     unsigned char c;
+ 	 volatile unsigned long i;
 
      while(1) {
-          c = uart_getc();
-          if(c == '\r') {
-               uart_putc('\n');
-               uart_putc('\r');
-          } else {
-               uart_putc('[');
-               uart_putc(c);
-               uart_putc(']');
-          }
-     }
+
+		P1OUT ^= BIT6; 			// Toggle P1.6 output (green LED) using exclusive-OR
+		i = 50000;             	// Delay
+
+		do (i--);				// busy waiting (bad)
+		while (i != 0);
+     } 
 }
 
